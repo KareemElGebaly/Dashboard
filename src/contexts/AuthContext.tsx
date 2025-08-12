@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AuthState, User } from '../types';
+import { dbApi } from '../api/database';
 
 interface AuthContextType extends AuthState {
   login: (email: string, otp?: string) => Promise<{ success: boolean; needsOTP?: boolean; message?: string }>;
@@ -146,7 +147,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           return { success: true };
         }
-      } else if (invitedUser) {
+      } else if (dbUser) {
         // Invited user login with OTP
         if (!otp) {
           // First step: request OTP
@@ -180,12 +181,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           // OTP verified, login invited user
           setAuthState({
-            user: invitedUser,
+            user: dbUser,
             isAuthenticated: true,
             isAdmin: false,
           });
 
-          localStorage.setItem('currentUser', JSON.stringify(invitedUser));
+          localStorage.setItem('currentUser', JSON.stringify(dbUser));
           localStorage.removeItem('pendingOTP');
           
           return { success: true };
@@ -206,10 +207,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      const users = JSON.parse(localStorage.getItem('invitedUsers') || '[]');
-      
-      // Check if user already exists
-      if (users.find((u: User) => u.email === email)) {
+      // Check if user already exists in database
+      const existingUser = await dbApi.getUser(email);
+      if (existingUser) {
         return false;
       }
 
@@ -222,21 +222,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         createdAt: new Date().toISOString(),
       };
 
-      users.push(newUser);
-      localStorage.setItem('invitedUsers', JSON.stringify(users));
+      const success = await dbApi.createUser(newUser);
       
       // In a real app, this would send an invitation email
       console.log(`📧 Invitation sent to ${email}`);
       
-      return true;
+      return success;
     } catch (error) {
       console.error('Invite user error:', error);
       return false;
     }
   };
 
-  const getInvitedUsers = (): User[] => {
-    return JSON.parse(localStorage.getItem('invitedUsers') || '[]');
+  const getInvitedUsers = async (): Promise<User[]> => {
+    try {
+      return await dbApi.getInvitedUsers();
+    } catch (error) {
+      console.error('Get invited users error:', error);
+      return [];
+    }
   };
 
   const deleteUser = async (userId: string): Promise<boolean> => {
@@ -245,11 +249,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      const users = JSON.parse(localStorage.getItem('invitedUsers') || '[]');
-      const updatedUsers = users.filter((u: User) => u.id !== userId);
-      localStorage.setItem('invitedUsers', JSON.stringify(updatedUsers));
-      
-      return true;
+      return await dbApi.deleteUser(userId);
     } catch (error) {
       console.error('Delete user error:', error);
       return false;
@@ -258,9 +258,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setAuthState({
-      user: null,
-      isAuthenticated: false,
-      isAdmin: false,
+      // Check if it's admin or invited user in database
+      const dbUser = await dbApi.getUser(email);
     });
     localStorage.removeItem('currentUser');
     localStorage.removeItem('pendingOTP');

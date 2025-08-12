@@ -9,78 +9,59 @@ import CreditorManager from './components/CreditorManager';
 import ExpenseManager from './components/ExpenseManager';
 import CashFlowMonitor from './components/CashFlowMonitor';
 import UserManagement from './components/UserManagement';
-import { Creditor, Expense, CashFlowSettings } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
-import { calculateCreditorOwed } from './utils/calculations';
+import { useDatabase } from './hooks/useDatabase';
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [creditors, setCreditors] = useLocalStorage<Creditor[]>('creditors', []);
-  const [expenses, setExpenses] = useLocalStorage<Expense[]>('expenses', []);
-  const [creditorTypes, setCreditorTypes] = useLocalStorage<string[]>('creditorTypes', ['Supplier', 'Landlord']);
-  const [settings, setSettings] = useLocalStorage<CashFlowSettings>('cashFlowSettings', {
-    cashOnHand: 0,
-    bankBalance: 0,
-    dailyIncome: 0,
-  });
-
-  // Update creditor totals when expenses change
-  useEffect(() => {
-    const updatedCreditors = creditors.map(creditor => ({
-      ...creditor,
-      totalOwed: calculateCreditorOwed(creditor.id, expenses),
-    }));
-    setCreditors(updatedCreditors);
-  }, [expenses, creditors]);
+  
+  const {
+    creditors,
+    expenses,
+    creditorTypes,
+    settings,
+    loading,
+    error,
+    addCreditor,
+    updateCreditor,
+    deleteCreditor,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    updateSettings,
+    addCreditorType,
+  } = useDatabase(user?.id || null);
 
   if (!isAuthenticated) {
     return <AuthForm />;
   }
 
-  const handleAddCreditor = (creditorData: Omit<Creditor, 'id' | 'totalOwed'>) => {
-    const newCreditor: Creditor = {
-      ...creditorData,
-      id: Date.now().toString(),
-      totalOwed: 0,
-    };
-    setCreditors([...creditors, newCreditor]);
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleUpdateCreditor = (updatedCreditor: Creditor) => {
-    setCreditors(creditors.map(creditor => 
-      creditor.id === updatedCreditor.id ? updatedCreditor : creditor
-    ));
-  };
-
-  const handleDeleteCreditor = (id: string) => {
-    setCreditors(creditors.filter(creditor => creditor.id !== id));
-    setExpenses(expenses.filter(expense => expense.creditorId !== id));
-  };
-
-  const handleAddCreditorType = (type: string) => {
-    if (!creditorTypes.includes(type)) {
-      setCreditorTypes([...creditorTypes, type]);
-    }
-  };
-
-  const handleAddExpense = (expenseData: Omit<Expense, 'id'>) => {
-    const newExpense: Expense = {
-      ...expenseData,
-      id: Date.now().toString(),
-    };
-    setExpenses([...expenses, newExpense]);
-  };
-
-  const handleUpdateExpense = (updatedExpense: Expense) => {
-    setExpenses(expenses.map(expense => 
-      expense.id === updatedExpense.id ? updatedExpense : expense
-    ));
-  };
-
-  const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter(expense => expense.id !== id));
-  };
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 dark:text-red-400 mb-4">Error loading dashboard: {error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const renderActiveTab = () => {
     switch (activeTab) {
@@ -96,11 +77,11 @@ const AppContent: React.FC = () => {
         return (
           <CreditorManager
             creditors={creditors}
-            onAddCreditor={handleAddCreditor}
-            onUpdateCreditor={handleUpdateCreditor}
-            onDeleteCreditor={handleDeleteCreditor}
+            onAddCreditor={addCreditor}
+            onUpdateCreditor={updateCreditor}
+            onDeleteCreditor={deleteCreditor}
             creditorTypes={creditorTypes}
-            onAddCreditorType={handleAddCreditorType}
+            onAddCreditorType={addCreditorType}
           />
         );
       case 'expenses':
@@ -108,16 +89,16 @@ const AppContent: React.FC = () => {
           <ExpenseManager
             expenses={expenses}
             creditors={creditors}
-            onAddExpense={handleAddExpense}
-            onUpdateExpense={handleUpdateExpense}
-            onDeleteExpense={handleDeleteExpense}
+            onAddExpense={addExpense}
+            onUpdateExpense={updateExpense}
+            onDeleteExpense={deleteExpense}
           />
         );
       case 'cash-flow':
         return (
           <CashFlowMonitor
             settings={settings}
-            onUpdateSettings={setSettings}
+            onUpdateSettings={updateSettings}
             expenses={expenses}
             creditors={creditors}
           />

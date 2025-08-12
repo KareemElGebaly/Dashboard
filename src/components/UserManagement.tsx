@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 const UserManagement: React.FC = () => {
   const { isAdmin, inviteUser, getInvitedUsers, deleteUser } = useAuth();
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [invitedUsers, setInvitedUsers] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -13,7 +14,19 @@ const UserManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const invitedUsers = getInvitedUsers();
+  // Load invited users on component mount
+  useEffect(() => {
+    loadInvitedUsers();
+  }, []);
+
+  const loadInvitedUsers = async () => {
+    try {
+      const users = await getInvitedUsers();
+      setInvitedUsers(users);
+    } catch (error) {
+      console.error('Failed to load invited users:', error);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -35,6 +48,7 @@ const UserManagement: React.FC = () => {
         setSuccess('User invited successfully!');
         setFormData({ email: '', name: '' });
         setShowInviteForm(false);
+        await loadInvitedUsers(); // Reload users list
       } else {
         setError('Failed to invite user. User may already exist.');
       }
@@ -50,6 +64,7 @@ const UserManagement: React.FC = () => {
       const result = await deleteUser(userId);
       if (result) {
         setSuccess('User deleted successfully!');
+        await loadInvitedUsers(); // Reload users list
       } else {
         setError('Failed to delete user.');
       }
