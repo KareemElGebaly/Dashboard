@@ -129,18 +129,28 @@ app.post('/api/expenses', (req, res) => {
   try {
     const { id, amount, dueDate, paymentMethod, creditorId, note, userId } = req.body;
     
+    console.log('Creating expense:', { id, amount, creditorId, userId });
+    
     // Insert the expense
-    db.prepare(`
+    const insertResult = db.prepare(`
       INSERT INTO expenses (id, amount, due_date, payment_method, creditor_id, note, user_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, amount, dueDate, paymentMethod, creditorId, note, userId);
     
+    console.log('Expense inserted, changes:', insertResult.changes);
+    
     // Update creditor total_owed
-    db.prepare(`
+    const updateResult = db.prepare(`
       UPDATE creditors 
       SET total_owed = (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE creditor_id = ?)
       WHERE id = ?
     `).run(creditorId, creditorId);
+    
+    console.log('Creditor total updated, changes:', updateResult.changes);
+    
+    // Verify the update
+    const updatedCreditor = db.prepare('SELECT name, total_owed FROM creditors WHERE id = ?').get(creditorId);
+    console.log('Updated creditor:', updatedCreditor);
     
     res.json({ success: true });
   } catch (error) {
