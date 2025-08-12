@@ -60,11 +60,12 @@ app.get('/api/users', (req, res) => {
 app.get('/api/creditors/:userId', (req, res) => {
   try {
     const creditors = db.prepare(`
-      SELECT c.*, COALESCE(SUM(e.amount), 0) as total_owed
+      SELECT c.id, c.name, c.type, c.contact_info, c.user_id, c.created_at,
+             COALESCE(SUM(e.amount), 0) as total_owed
       FROM creditors c
       LEFT JOIN expenses e ON c.id = e.creditor_id
       WHERE c.user_id = ?
-      GROUP BY c.id
+      GROUP BY c.id, c.name, c.type, c.contact_info, c.user_id, c.created_at
       ORDER BY c.name
     `).all(req.params.userId);
     res.json(creditors);
@@ -127,10 +128,20 @@ app.get('/api/expenses/:userId', (req, res) => {
 app.post('/api/expenses', (req, res) => {
   try {
     const { id, amount, dueDate, paymentMethod, creditorId, note, userId } = req.body;
-    const result = db.prepare(`
+    
+    // Insert the expense
+    db.prepare(`
       INSERT INTO expenses (id, amount, due_date, payment_method, creditor_id, note, user_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, amount, dueDate, paymentMethod, creditorId, note, userId);
+    
+    // Update creditor total_owed
+    db.prepare(`
+      UPDATE creditors 
+      SET total_owed = (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE creditor_id = ?)
+      WHERE id = ?
+    `).run(creditorId, creditorId);
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Error creating expense:', error);
@@ -141,12 +152,33 @@ app.post('/api/expenses', (req, res) => {
 app.put('/api/expenses/:id', (req, res) => {
   try {
     const { amount, dueDate, paymentMethod, creditorId, note, userId } = req.body;
-    const result = db.prepare(`
+    
+    // Get old creditor ID before update
+    const oldExpense = db.prepare('SELECT creditor_id FROM expenses WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+    
+    // Update the expense
+    db.prepare(`
       UPDATE expenses 
       SET amount = ?, due_date = ?, payment_method = ?, creditor_id = ?, note = ?
       WHERE id = ? AND user_id = ?
     `).run(amount, dueDate, paymentMethod, creditorId, note, req.params.id, userId);
-    res.json({ success: result.changes > 0 });
+    
+    // Update both old and new creditor totals
+    if (oldExpense) {
+      db.prepare(`
+        UPDATE creditors 
+        SET total_owed = (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE creditor_id = ?)
+        WHERE id = ?
+      `).run(oldExpense.creditor_id, oldExpense.creditor_id);
+    }
+    
+    db.prepare(`
+      UPDATE creditors 
+      SET total_owed = (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE creditor_id = ?)
+      WHERE id = ?
+    `).run(creditorId, creditorId);
+    
+    res.json({ success: true });
   } catch (error) {
     console.error('Error updating expense:', error);
     res.status(500).json({ error: error.message });
@@ -155,7 +187,21 @@ app.put('/api/expenses/:id', (req, res) => {
 
 app.delete('/api/expenses/:id/:userId', (req, res) => {
   try {
+    // Get creditor ID before deleting
+    const expense = db.prepare('SELECT creditor_id FROM expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.params.userId);
+    
+    // Delete the expense
     const result = db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
+    
+    // Update creditor total_owed
+    if (expense && result.changes > 0) {
+      db.prepare(`
+        UPDATE creditors 
+        SET total_owed = (SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE creditor_id = ?)
+        WHERE id = ?
+      `).run(expense.creditor_id, expense.creditor_id);
+    }
+    
     res.json({ success: result.changes > 0 });
   } catch (error) {
     console.error('Error deleting expense:', error);
