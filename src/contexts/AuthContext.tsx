@@ -249,7 +249,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      return await dbApi.deleteUser(userId);
+      // TODO: Implement API call to delete user
+      // For now, return false as we need backend API
+      return false;
     } catch (error) {
       console.error('Delete user error:', error);
       return false;
@@ -258,8 +260,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setAuthState({
-      // Check if it's admin or invited user in database
-      const dbUser = await dbApi.getUser(email);
+      user: null,
+      isAuthenticated: false,
+      isAdmin: false,
     });
     localStorage.removeItem('currentUser');
     localStorage.removeItem('pendingOTP');
