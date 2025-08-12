@@ -129,7 +129,7 @@ app.post('/api/expenses', (req, res) => {
   try {
     const { id, amount, dueDate, paymentMethod, creditorId, note, userId } = req.body;
     
-    console.log('Creating expense:', { id, amount, creditorId, userId });
+    console.log('🔄 Creating expense:', { id, amount, creditorId, userId });
     
     // Insert the expense
     const insertResult = db.prepare(`
@@ -137,7 +137,7 @@ app.post('/api/expenses', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, amount, dueDate, paymentMethod, creditorId, note, userId);
     
-    console.log('Expense inserted, changes:', insertResult.changes);
+    console.log('✅ Expense inserted, changes:', insertResult.changes);
     
     // Update creditor total_owed
     const updateResult = db.prepare(`
@@ -146,15 +146,15 @@ app.post('/api/expenses', (req, res) => {
       WHERE id = ?
     `).run(creditorId, creditorId);
     
-    console.log('Creditor total updated, changes:', updateResult.changes);
+    console.log('💰 Creditor total updated, changes:', updateResult.changes);
     
     // Verify the update
     const updatedCreditor = db.prepare('SELECT name, total_owed FROM creditors WHERE id = ?').get(creditorId);
-    console.log('Updated creditor:', updatedCreditor);
+    console.log('📊 Updated creditor:', updatedCreditor);
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Error creating expense:', error);
+    console.error('❌ Error creating expense:', error);
     res.status(500).json({ error: error.message });
   }
 });
