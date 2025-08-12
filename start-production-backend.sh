@@ -19,7 +19,7 @@ pm2 delete dashboard-backend 2>/dev/null || true
 
 # Start backend with PM2
 echo "🔥 Starting backend server with PM2..."
-pm2 start index.js --name "dashboard-backend" --log-file /var/log/dashboard/backend.log
+pm2 start index.js --name "dashboard-backend"
 
 # Save PM2 configuration
 pm2 save
