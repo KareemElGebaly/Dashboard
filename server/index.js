@@ -129,7 +129,7 @@ app.post('/api/expenses', (req, res) => {
   try {
     const { id, amount, dueDate, paymentMethod, creditorId, note, userId } = req.body;
     
-    console.log('🔄 Creating expense:', { id, amount, creditorId, userId });
+    console.log('🔄 Creating expense:', { id, amount, creditorId, userId, note });
     
     // Insert the expense
     const insertResult = db.prepare(`
@@ -154,7 +154,8 @@ app.post('/api/expenses', (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('❌ Error creating expense:', error);
+    console.error('❌ Error creating expense:', error.message);
+    console.error('❌ Full error:', error);
     res.status(500).json({ error: error.message });
   }
 });
