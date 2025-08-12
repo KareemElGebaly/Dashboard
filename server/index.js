@@ -17,6 +17,8 @@ const db = new Database(dbPath);
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
+console.log(`🗄️ Connected to database: ${dbPath}`);
+
 // API Routes
 
 // Users
@@ -25,6 +27,7 @@ app.get('/api/users/:email', (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(req.params.email);
     res.json(user || null);
   } catch (error) {
+    console.error('Error fetching user:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -38,6 +41,7 @@ app.post('/api/users', (req, res) => {
     `).run(id, email, name, role, invitedBy);
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (error) {
+    console.error('Error creating user:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -47,6 +51,7 @@ app.get('/api/users', (req, res) => {
     const users = db.prepare('SELECT * FROM users WHERE role = "user" ORDER BY created_at DESC').all();
     res.json(users);
   } catch (error) {
+    console.error('Error fetching users:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -64,6 +69,7 @@ app.get('/api/creditors/:userId', (req, res) => {
     `).all(req.params.userId);
     res.json(creditors);
   } catch (error) {
+    console.error('Error fetching creditors:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -77,6 +83,7 @@ app.post('/api/creditors', (req, res) => {
     `).run(id, name, type, contactInfo, userId);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error creating creditor:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -91,6 +98,7 @@ app.put('/api/creditors/:id', (req, res) => {
     `).run(name, type, contactInfo, req.params.id, userId);
     res.json({ success: result.changes > 0 });
   } catch (error) {
+    console.error('Error updating creditor:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -100,6 +108,7 @@ app.delete('/api/creditors/:id/:userId', (req, res) => {
     const result = db.prepare('DELETE FROM creditors WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
     res.json({ success: result.changes > 0 });
   } catch (error) {
+    console.error('Error deleting creditor:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -110,6 +119,7 @@ app.get('/api/expenses/:userId', (req, res) => {
     const expenses = db.prepare('SELECT * FROM expenses WHERE user_id = ? ORDER BY due_date').all(req.params.userId);
     res.json(expenses);
   } catch (error) {
+    console.error('Error fetching expenses:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -123,6 +133,7 @@ app.post('/api/expenses', (req, res) => {
     `).run(id, amount, dueDate, paymentMethod, creditorId, note, userId);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error creating expense:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -137,6 +148,7 @@ app.put('/api/expenses/:id', (req, res) => {
     `).run(amount, dueDate, paymentMethod, creditorId, note, req.params.id, userId);
     res.json({ success: result.changes > 0 });
   } catch (error) {
+    console.error('Error updating expense:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -146,6 +158,7 @@ app.delete('/api/expenses/:id/:userId', (req, res) => {
     const result = db.prepare('DELETE FROM expenses WHERE id = ? AND user_id = ?').run(req.params.id, req.params.userId);
     res.json({ success: result.changes > 0 });
   } catch (error) {
+    console.error('Error deleting expense:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -156,6 +169,7 @@ app.get('/api/settings/:userId', (req, res) => {
     const settings = db.prepare('SELECT * FROM cash_flow_settings WHERE user_id = ?').get(req.params.userId);
     res.json(settings || { cashOnHand: 0, bankBalance: 0, dailyIncome: 0 });
   } catch (error) {
+    console.error('Error fetching settings:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -169,6 +183,7 @@ app.post('/api/settings', (req, res) => {
     `).run(userId, cashOnHand, bankBalance, dailyIncome);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error updating settings:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -179,6 +194,7 @@ app.get('/api/creditor-types/:userId', (req, res) => {
     const types = db.prepare('SELECT name FROM creditor_types WHERE user_id = ? OR user_id IS NULL ORDER BY name').all(req.params.userId);
     res.json(types.map(t => t.name));
   } catch (error) {
+    console.error('Error fetching creditor types:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -189,23 +205,42 @@ app.post('/api/creditor-types', (req, res) => {
     const result = db.prepare('INSERT OR IGNORE INTO creditor_types (name, user_id) VALUES (?, ?)').run(name, userId);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error adding creditor type:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', database: 'connected' });
+  try {
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    res.json({ 
+      status: 'OK', 
+      database: 'connected',
+      users: userCount.count,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'ERROR', error: error.message });
+  }
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend API server running on port ${PORT}`);
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`🚀 Backend API server running on http://127.0.0.1:${PORT}`);
   console.log(`🗄️ Database: ${dbPath}`);
+  console.log(`📊 Health check: http://127.0.0.1:${PORT}/api/health`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down backend server...');
+  db.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down backend server...');
   db.close();
   process.exit(0);
 });
